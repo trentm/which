@@ -1,0 +1,61 @@
+diff
+
+A patch originally from a change by Shane for use in Komodo's main which.py to
+add .app dir results to results. This is a bastardization because it breaks
+the original design that results are things you can spawn with low-level 
+process launching APIs.
+
+I think the right answer is to have a parallel whichapp API that does the
+addition .app stuff. However, perhaps the design should be ammended to allow
+returning things that the local system's start/open/<equivalent> can
+handle.
+
+--- /home/trentm/tm/which/which.py	2007-02-28 11:12:41.000000000 -0800
++++ which.py	2007-02-28 11:33:19.000000000 -0800
+@@ -124,10 +124,13 @@
+                 sys.stderr.write("duplicate: %s (%s)\n" % potential)
+             return None
+     else:
+-        if not stat.S_ISREG(os.stat(potential[0]).st_mode):
++        is_darwin_app = (sys.platform == "darwin"
++                         and potential[0].endswith(".app"))
++        if not is_darwin_app \
++           and not stat.S_ISREG(os.stat(potential[0]).st_mode):
+             if verbose:
+                 sys.stderr.write("not a regular file: %s (%s)\n" % potential)
+-        elif sys.platform != "win32" \
++        elif not is_darwin_app and sys.platform != "win32" \
+              and not os.access(potential[0], os.X_OK):
+             if verbose:
+                 sys.stderr.write("no executable access: %s (%s)\n"\
+@@ -165,6 +168,9 @@
+         path = os.environ.get("PATH", "").split(os.pathsep)
+         if sys.platform.startswith("win"):
+             path.insert(0, os.curdir)  # implied by Windows shell
++        if sys.platform == "darwin":
++            path.insert(0, "/Network/Applications")
++            path.insert(0, "/Applications")
+     else:
+         usingGivenPath = 1
+ 
+@@ -181,6 +187,9 @@
+                 exts = ['.COM', '.EXE', '.BAT']
+         elif not isinstance(exts, list):
+             raise TypeError("'exts' argument must be a list or None")
++    elif sys.platform == "darwin":
++        if exts is None:
++            exts = [".app"]
+     else:
+         if exts is not None:
+             raise WhichError("'exts' argument is not supported on "\
+@@ -206,7 +215,9 @@
+             for ext in ['']+exts:
+                 absName = os.path.abspath(
+                     os.path.normpath(os.path.join(dirName, command+ext)))
+-                if os.path.isfile(absName):
++                if os.path.isfile(absName) \
++                   or (sys.platform == "darwin" and absName.endswith(".app")
++                       and os.path.isdir(absName)):
+                     if usingGivenPath:
+                         fromWhere = "from given path element %d" % i
+                     elif not sys.platform.startswith("win"):
